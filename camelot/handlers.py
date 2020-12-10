@@ -3,7 +3,7 @@
 import os
 import sys
 
-from PyPDF2 import PdfFileReader, PdfFileWriter
+import fitz
 
 from .core import TableList
 from .parsers import Stream, Lattice
@@ -70,20 +70,22 @@ class PDFHandler(object):
         if pages == "1":
             page_numbers.append({"start": 1, "end": 1})
         else:
-            infile = PdfFileReader(open(filepath, "rb"), strict=False)
-            if infile.isEncrypted:
-                infile.decrypt(self.password)
-            if pages == "all":
-                page_numbers.append({"start": 1, "end": infile.getNumPages()})
-            else:
-                for r in pages.split(","):
-                    if "-" in r:
-                        a, b = r.split("-")
-                        if b == "end":
-                            b = infile.getNumPages()
-                        page_numbers.append({"start": int(a), "end": int(b)})
-                    else:
-                        page_numbers.append({"start": int(r), "end": int(r)})
+            with fitz.open(filepath) as infile:
+                if infile.needsPass:
+                    infile.authenticate(self.password)
+                if pages == "all":
+                    page_numbers.append({"start": 1, "end": infile.pageCount})
+                else:
+                    for r in pages.split(","):
+                        if "-" in r:
+                            a, b = r.split("-")
+                            if b == "end":
+                                b = infile.pageCount
+                            page_numbers.append(
+                                {"start": int(a), "end": int(b)})
+                        else:
+                            page_numbers.append(
+                                {"start": int(r), "end": int(r)})
         P = []
         for p in page_numbers:
             P.extend(range(p["start"], p["end"] + 1))
@@ -102,17 +104,20 @@ class PDFHandler(object):
             Tmp directory.
 
         """
-        with open(filepath, "rb") as fileobj:
-            infile = PdfFileReader(fileobj, strict=False)
-            if infile.isEncrypted:
-                infile.decrypt(self.password)
+        # with open(filepath, "rb") as fileobj:
+        with fitz.open(filepath) as infile:
+            if infile.needsPass:
+                infile.authenticate(self.password)
             fpath = os.path.join(temp, f"page-{page}.pdf")
             froot, fext = os.path.splitext(fpath)
-            p = infile.getPage(page - 1)
-            outfile = PdfFileWriter()
-            outfile.addPage(p)
-            with open(fpath, "wb") as f:
-                outfile.write(f)
+            p = infile[page - 1]
+            p.setRotation(0)
+            outfile = fitz.open()
+            outpage = outfile.newPage(-1, width=p.rect.width,
+                                      height=p.rect.height)
+            outpage.showPDFpage(outpage.rect, infile, page - 1)
+            outfile.save(fpath)
+
             layout, dim = get_page_layout(fpath)
             # fix rotated PDF
             chars = get_text_objects(layout, ltype="char")
@@ -120,20 +125,24 @@ class PDFHandler(object):
             vertical_text = get_text_objects(layout, ltype="vertical_text")
             rotation = get_rotation(chars, horizontal_text, vertical_text)
             if rotation != "":
-                fpath_new = "".join([froot.replace("page", "p"), "_rotated", fext])
+                fpath_new = "".join(
+                    [froot.replace("page", "p"), "_rotated", fext])
                 os.rename(fpath, fpath_new)
-                infile = PdfFileReader(open(fpath_new, "rb"), strict=False)
-                if infile.isEncrypted:
-                    infile.decrypt(self.password)
-                outfile = PdfFileWriter()
-                p = infile.getPage(0)
+                infile = fitz.open(fpath_new)
+                if infile.needsPass:
+                    infile.authenticate(self.password)
+                outfile = fitz.open()
+                p = infile[0]
+
+                outpage = outfile.newPage(-1, width=p.rect.width,
+                                          height=p.rect.height)
+                outpage.showPDFpage(outpage.rect, infile, 0)
                 if rotation == "anticlockwise":
-                    p.rotateClockwise(90)
+                    outpage.setRotation((p.rotation + 90) % 360)
                 elif rotation == "clockwise":
-                    p.rotateCounterClockwise(90)
-                outfile.addPage(p)
-                with open(fpath, "wb") as f:
-                    outfile.write(f)
+                    outpage.setRotation((p.rotation + 270) % 360)
+
+                outfile.save(fpath)
 
     def parse(
         self, flavor="lattice", suppress_stdout=False, layout_kwargs={}, **kwargs
@@ -161,15 +170,23 @@ class PDFHandler(object):
         """
         tables = []
         with TemporaryDirectory() as tempdir:
-            for p in self.pages:
-                self._save_page(self.filepath, p, tempdir)
-            pages = [
-                os.path.join(tempdir, f"page-{p}.pdf") for p in self.pages
-            ]
-            parser = Lattice(**kwargs) if flavor == "lattice" else Stream(**kwargs)
-            for p in pages:
-                t = parser.extract_tables(
-                    p, suppress_stdout=suppress_stdout, layout_kwargs=layout_kwargs
-                )
-                tables.extend(t)
+            try:
+                for p in self.pages:
+                    self._save_page(self.filepath, p, tempdir)
+                pages = [
+                    os.path.join(tempdir, f"page-{p}.pdf") for p in self.pages
+                ]
+                parser = Lattice(
+                    **kwargs) if flavor == "lattice" else Stream(**kwargs)
+                for p in pages:
+                    t = parser.extract_tables(
+                        p, suppress_stdout=suppress_stdout, layout_kwargs=layout_kwargs
+                    )
+                    tables.extend(t)
+            except ValueError as err:
+                if str(err) == "document closed or encrypted":
+                    raise ValueError("file has not been decrypted") from err
+
+                raise
+
         return TableList(sorted(tables))
