@@ -104,7 +104,6 @@ class PDFHandler(object):
             Tmp directory.
 
         """
-        # with open(filepath, "rb") as fileobj:
         with fitz.open(filepath) as infile:
             if infile.needsPass:
                 infile.authenticate(self.password)
