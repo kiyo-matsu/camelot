@@ -114,7 +114,7 @@ class PDFHandler(object):
             outfile = fitz.open()
             outpage = outfile.newPage(-1, width=p.rect.width,
                                       height=p.rect.height)
-            outpage.showPDFpage(outpage.rect, infile, page - 1)
+            outpage.showPDFpage(outpage.rect, infile, pno=page-1)
             outfile.save(fpath)
 
             layout, dim = get_page_layout(fpath)
@@ -135,7 +135,7 @@ class PDFHandler(object):
 
                 outpage = outfile.newPage(-1, width=p.rect.width,
                                           height=p.rect.height)
-                outpage.showPDFpage(outpage.rect, infile, 0)
+                outpage.showPDFpage(outpage.rect, infile, pno=0)
                 if rotation == "anticlockwise":
                     outpage.setRotation((p.rotation + 90) % 360)
                 elif rotation == "clockwise":

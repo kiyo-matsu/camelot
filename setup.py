@@ -20,7 +20,7 @@ requires = [
     'openpyxl>=2.5.8',
     'pandas>=0.23.4',
     'pdfminer.six>=20200726',
-    'PyMuPDF>=1.18.4'
+    'PyMuPDF==1.18.5'
 ]
 
 cv_requires = [
@@ -61,20 +61,20 @@ def setup_package():
                         'cv': cv_requires,
                         'dev': dev_requires,
                         'plot': plot_requires
-                    },
-                    entry_points={
+    },
+        entry_points={
                         'console_scripts': [
                             'camelot = camelot.cli:cli',
                         ],
-                    },
-                    classifiers=[
+    },
+        classifiers=[
                         # Trove classifiers
                         # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
                         'License :: OSI Approved :: MIT License',
                         'Programming Language :: Python :: 3.6',
                         'Programming Language :: Python :: 3.7',
                         'Programming Language :: Python :: 3.8'
-                    ])
+    ])
 
     try:
         from setuptools import setup
