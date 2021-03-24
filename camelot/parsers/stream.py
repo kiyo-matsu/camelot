@@ -127,15 +127,13 @@ class Stream(BaseParser):
             # if t.get_text().strip() and all([obj.upright for obj in t._objs if
             # type(obj) is LTChar]):
             if t.get_text().strip():
-                if not np.isclose(row_y, t.y0, atol=row_tol):
+                if row_y > t.y1 and not np.isclose(row_y, t.y1, atol=row_tol):
                     rows.append(sorted(temp, key=lambda t: t.x0))
                     temp = []
-                    row_y = t.y0
+                row_y = t.y0
                 temp.append(t)
 
         rows.append(sorted(temp, key=lambda t: t.x0))
-        if len(rows) > 1:
-            __ = rows.pop(0)  # TODO: hacky
         return rows
 
     @staticmethod
@@ -203,7 +201,8 @@ class Stream(BaseParser):
             sum([(t.y0 + t.y1) / 2 for t in r]) / len(r) if len(r) > 0 else 0
             for r in rows_grouped
         ]
-        rows = [(row_mids[i] + row_mids[i - 1]) / 2 for i in range(1, len(row_mids))]
+        rows = [(row_mids[i] + row_mids[i - 1]) /
+                2 for i in range(1, len(row_mids))]
         rows.insert(0, text_y_max)
         rows.append(text_y_min)
         rows = [(rows[i], rows[i + 1]) for i in range(0, len(rows) - 1)]
@@ -264,7 +263,8 @@ class Stream(BaseParser):
     def _validate_columns(self):
         if self.table_areas is not None and self.columns is not None:
             if len(self.table_areas) != len(self.columns):
-                raise ValueError("Length of table_areas and columns" " should be equal")
+                raise ValueError(
+                    "Length of table_areas and columns" " should be equal")
 
     def _nurminen_table_detection(self, textlines):
         """A general implementation of the table detection algorithm
@@ -304,7 +304,8 @@ class Stream(BaseParser):
                     y1 = float(y1)
                     x2 = float(x2)
                     y2 = float(y2)
-                    region_text = text_in_bbox((x1, y2, x2, y1), self.horizontal_text)
+                    region_text = text_in_bbox(
+                        (x1, y2, x2, y1), self.horizontal_text)
                     hor_text.extend(region_text)
             # find tables based on nurminen's detection algorithm
             table_bbox = self._nurminen_table_detection(hor_text)
@@ -330,8 +331,10 @@ class Stream(BaseParser):
 
         self.t_bbox = t_bbox
 
-        text_x_min, text_y_min, text_x_max, text_y_max = self._text_bbox(self.t_bbox)
-        rows_grouped = self._group_rows(self.t_bbox["horizontal"], row_tol=self.row_tol)
+        text_x_min, text_y_min, text_x_max, text_y_max = self._text_bbox(
+            self.t_bbox)
+        rows_grouped = self._group_rows(
+            self.t_bbox["horizontal"], row_tol=self.row_tol)
         rows = self._join_rows(rows_grouped, text_y_max, text_y_min)
         elements = [len(r) for r in rows_grouped]
 
@@ -351,7 +354,7 @@ class Stream(BaseParser):
             if not len(elements):
                 cols = [(text_x_min, text_x_max)]
             else:
-                ncols = max(set(elements), key=elements.count)
+                ncols = max(set(elements))
                 if ncols == 1:
                     # if mode is 1, the page usually contains not tables
                     # but there can be cases where the list can be skewed,
@@ -360,13 +363,15 @@ class Stream(BaseParser):
                     # the mode after removing 1s
                     elements = list(filter(lambda x: x != 1, elements))
                     if len(elements):
-                        ncols = max(set(elements), key=elements.count)
+                        ncols = max(set(elements))
                     else:
                         warnings.warn(
                             f"No tables found in table area {table_idx + 1}"
                         )
-                cols = [(t.x0, t.x1) for r in rows_grouped if len(r) == ncols for t in r]
-                cols = self._merge_columns(sorted(cols), column_tol=self.column_tol)
+                cols = [(t.x0, t.x1)
+                        for r in rows_grouped if len(r) == ncols for t in r]
+                cols = self._merge_columns(
+                    sorted(cols), column_tol=self.column_tol)
                 inner_text = []
                 for i in range(1, len(cols)):
                     left = cols[i - 1][1]
